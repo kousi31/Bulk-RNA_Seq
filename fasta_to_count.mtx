@@ -1,0 +1,54 @@
+# Pipeline RNA-seq analysis
+
+# 1. Quality assesment – FastQC
+ 
+ fastqc *.fastq.gz
+
+# Summary of all fastqc files with multiQC
+ 
+ multiqc ./
+
+# 2. Adapter trimming and quality control - Trimmomatic
+
+	Trimmomatic-0.36/trimmomatic-0.36.jar PE -threads 10 -phred33 R1.fastq.gz 
+	R2.fastq.gz R1_P.fq.gz R1_UP.fq.gz R2_P.fq.gz R2_UP.fq.gz 
+	ILLUMINACLIP:TruSeq3-PE-2:2:30:10 LEADING:20 TRAILING:20 MINLEN:50
+	
+	# - Remove illumine adapters
+	# - filter leading and trailing bases below Phred quality score of 20
+	# - Remove reads with less than 50bp of length
+
+# 3. Build index for genome
+
+     	hisat2-build -p 10 genome.fa index
+
+# 4. Align reads to the genome
+    
+    	hisat2 -p 10 --dta -x index -1 R1_P.fq -2 R2_P.fq -S Out.sam --summary-file summary.txt
+
+# 5. Samtools to convert quality alignments in SAM to BAM format
+
+	samtools view -bS -h -q 40 -f 2 out.sam -o output.bam
+
+	  # - b output format is BAM
+	  # - S Input format is SAM
+ 	  # - f2 reads mapped in proper pair (refer SAM flags)
+	  # - q 40 skip alignment of reads with MAPQ less than 40
+
+# 6. Samtools sort
+ 	
+	samtools sort -no input.bam out.sorted.bam
+
+	# - n sort by read name rather than chromosomal co-ordinates
+	# - o output to a file
+
+# 7. Generate raw counts matrix
+
+	 htseq-count --format bam --order name --type exon --idattr gene_id 
+	–additional-attr gene_name sorted.bam Ref_gtf > gene_counts.tsv
+	
+	# --format - input format
+	# -- order – order by read name
+	# --type – exon (3rd column of GFF file)
+  	# --idattr – id attribute to use (gene id)
+        # --additional-attr additional attribute to add
